@@ -1,7 +1,22 @@
 import Testing
+import AsyncContentAsync
+import AsyncContentCore
 @testable import AsyncContentDemo
 
 struct AsyncContentDemoTests {
+    @Test
+    @MainActor
+    func loadStartsInLoadingInitialPhase() async {
+        let viewModel = DemoViewModel()
+
+        viewModel.load()
+
+        #expect(viewModel.store.resource.phase == .loadingInitial)
+
+        try? await Task.sleep(for: .milliseconds(700))
+        #expect(viewModel.store.resource.phase == .content(["Ava", "Liam", "Mia"]))
+    }
+
     @Test
     @MainActor
     func loadPopulatesContent() async {
@@ -27,7 +42,7 @@ struct AsyncContentDemoTests {
         try? await Task.sleep(for: .milliseconds(500))
 
         switch viewModel.store.resource.phase {
-        case .failedInitial(.network):
+        case .failedInitial(.loadFailed):
             #expect(Bool(true))
         default:
             #expect(Bool(false), "Expected initial failure")
@@ -43,6 +58,7 @@ struct AsyncContentDemoTests {
         try? await Task.sleep(for: .milliseconds(700))
 
         viewModel.reload()
+        #expect(viewModel.store.resource.activity.isReloading)
         try? await Task.sleep(for: .milliseconds(600))
 
         switch viewModel.store.resource.phase {
@@ -61,6 +77,7 @@ struct AsyncContentDemoTests {
         try? await Task.sleep(for: .milliseconds(700))
 
         viewModel.failAction()
+        #expect(viewModel.store.resource.activity.isPerformingAction)
         try? await Task.sleep(for: .milliseconds(400))
 
         #expect(viewModel.store.nextEffect != nil)

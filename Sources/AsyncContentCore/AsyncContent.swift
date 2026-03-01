@@ -4,11 +4,11 @@ public protocol EmptyRepresentable {
     var isEmpty: Bool { get }
 }
 
-public enum AsyncContentPhase<Value, InitialError> {
+public enum AsyncContentPhase<Value, BlockingError> {
     case initial
     case loadingInitial
     case content(Value)
-    case failedInitial(InitialError)
+    case failedInitial(BlockingError)
 }
 
 public enum AsyncContentActivity: Sendable {
@@ -57,12 +57,12 @@ public enum AsyncContentActivity: Sendable {
     }
 }
 
-public struct AsyncContent<Value, InitialError> {
-    public var phase: AsyncContentPhase<Value, InitialError>
+public struct AsyncContent<Value, BlockingError> {
+    public var phase: AsyncContentPhase<Value, BlockingError>
     public var activity: AsyncContentActivity
 
     public init(
-        phase: AsyncContentPhase<Value, InitialError> = .initial,
+        phase: AsyncContentPhase<Value, BlockingError> = .initial,
         activity: AsyncContentActivity = .none
     ) {
         self.phase = phase
@@ -77,7 +77,7 @@ public struct AsyncContent<Value, InitialError> {
         return value
     }
 
-    public var initialError: InitialError? {
+    public var blockingError: BlockingError? {
         guard case let .failedInitial(error) = phase else {
             return nil
         }
@@ -115,7 +115,7 @@ public extension AsyncContent {
         activity = .none
     }
 
-    mutating func finishInitialFailure(_ error: InitialError) {
+    mutating func finishInitialFailure(_ error: BlockingError) {
         phase = .failedInitial(error)
         activity = .none
     }
@@ -141,10 +141,10 @@ public extension AsyncContent {
         return true
     }
 
-    mutating func finishReloadFailure<ReloadError>(
-        _ error: ReloadError,
+    mutating func finishReloadFailure<TransientError>(
+        _ error: TransientError,
         id: UUID = UUID()
-    ) -> AsyncContentEffect<ReloadError, Never>? {
+    ) -> AsyncContentEffect<TransientError>? {
         guard hasContent else {
             return nil
         }
@@ -167,10 +167,10 @@ public extension AsyncContent {
         activity = activity.settingPerformingAction(false)
     }
 
-    mutating func finishActionFailure<ActionError>(
-        _ error: ActionError,
+    mutating func finishActionFailure<TransientError>(
+        _ error: TransientError,
         id: UUID = UUID()
-    ) -> AsyncContentEffect<Never, ActionError>? {
+    ) -> AsyncContentEffect<TransientError>? {
         guard hasContent else {
             return nil
         }
@@ -189,8 +189,8 @@ public extension AsyncContent {
         activity = .none
     }
 
-    func mapValue<NewValue>(_ transform: (Value) -> NewValue) -> AsyncContent<NewValue, InitialError> {
-        let nextPhase: AsyncContentPhase<NewValue, InitialError>
+    func mapValue<NewValue>(_ transform: (Value) -> NewValue) -> AsyncContent<NewValue, BlockingError> {
+        let nextPhase: AsyncContentPhase<NewValue, BlockingError>
         switch phase {
         case .initial:
             nextPhase = .initial
@@ -202,13 +202,13 @@ public extension AsyncContent {
             nextPhase = .failedInitial(error)
         }
 
-        return AsyncContent<NewValue, InitialError>(phase: nextPhase, activity: activity)
+        return AsyncContent<NewValue, BlockingError>(phase: nextPhase, activity: activity)
     }
 
-    func mapInitialError<NewInitialError>(
-        _ transform: (InitialError) -> NewInitialError
-    ) -> AsyncContent<Value, NewInitialError> {
-        let nextPhase: AsyncContentPhase<Value, NewInitialError>
+    func mapBlockingError<NewBlockingError>(
+        _ transform: (BlockingError) -> NewBlockingError
+    ) -> AsyncContent<Value, NewBlockingError> {
+        let nextPhase: AsyncContentPhase<Value, NewBlockingError>
         switch phase {
         case .initial:
             nextPhase = .initial
@@ -220,13 +220,13 @@ public extension AsyncContent {
             nextPhase = .failedInitial(transform(error))
         }
 
-        return AsyncContent<Value, NewInitialError>(phase: nextPhase, activity: activity)
+        return AsyncContent<Value, NewBlockingError>(phase: nextPhase, activity: activity)
     }
 }
 
-public enum AsyncContentEffect<ReloadError, ActionError>: Identifiable {
-    case reloadFailed(id: UUID, error: ReloadError)
-    case actionFailed(id: UUID, error: ActionError)
+public enum AsyncContentEffect<TransientError>: Identifiable {
+    case reloadFailed(id: UUID, error: TransientError)
+    case actionFailed(id: UUID, error: TransientError)
 
     public var id: UUID {
         switch self {
@@ -235,11 +235,11 @@ public enum AsyncContentEffect<ReloadError, ActionError>: Identifiable {
         }
     }
 
-    public static func makeReloadFailed(error: ReloadError, id: UUID = UUID()) -> Self {
+    public static func makeReloadFailed(error: TransientError, id: UUID = UUID()) -> Self {
         .reloadFailed(id: id, error: error)
     }
 
-    public static func makeActionFailed(error: ActionError, id: UUID = UUID()) -> Self {
+    public static func makeActionFailed(error: TransientError, id: UUID = UUID()) -> Self {
         .actionFailed(id: id, error: error)
     }
 }
@@ -258,16 +258,25 @@ public extension AsyncContentEffect {
             return .actionFailed
         }
     }
+
+    func mapError<NewError>(_ transform: (TransientError) -> NewError) -> AsyncContentEffect<NewError> {
+        switch self {
+        case let .reloadFailed(id, error):
+            return .reloadFailed(id: id, error: transform(error))
+        case let .actionFailed(id, error):
+            return .actionFailed(id: id, error: transform(error))
+        }
+    }
 }
 
-extension AsyncContentPhase: Equatable where Value: Equatable, InitialError: Equatable {}
-extension AsyncContentPhase: Sendable where Value: Sendable, InitialError: Sendable {}
+extension AsyncContentPhase: Equatable where Value: Equatable, BlockingError: Equatable {}
+extension AsyncContentPhase: Sendable where Value: Sendable, BlockingError: Sendable {}
 
-extension AsyncContent: Equatable where Value: Equatable, InitialError: Equatable {}
-extension AsyncContent: Sendable where Value: Sendable, InitialError: Sendable {}
+extension AsyncContent: Equatable where Value: Equatable, BlockingError: Equatable {}
+extension AsyncContent: Sendable where Value: Sendable, BlockingError: Sendable {}
 
-extension AsyncContentEffect: Equatable where ReloadError: Equatable, ActionError: Equatable {}
-extension AsyncContentEffect: Sendable where ReloadError: Sendable, ActionError: Sendable {}
+extension AsyncContentEffect: Equatable where TransientError: Equatable {}
+extension AsyncContentEffect: Sendable where TransientError: Sendable {}
 
 public enum CombinedInitialError<LeftError, RightError> {
     case left(LeftError)
@@ -283,11 +292,11 @@ public enum CombinedEffectSource: Sendable {
     case right
 }
 
-public struct TaggedEffect<ReloadError, ActionError>: Identifiable {
+public struct TaggedEffect<TransientError>: Identifiable {
     public let source: CombinedEffectSource
-    public let effect: AsyncContentEffect<ReloadError, ActionError>
+    public let effect: AsyncContentEffect<TransientError>
 
-    public init(source: CombinedEffectSource, effect: AsyncContentEffect<ReloadError, ActionError>) {
+    public init(source: CombinedEffectSource, effect: AsyncContentEffect<TransientError>) {
         self.source = source
         self.effect = effect
     }
@@ -297,14 +306,14 @@ public struct TaggedEffect<ReloadError, ActionError>: Identifiable {
     }
 }
 
-extension TaggedEffect: Equatable where ReloadError: Equatable, ActionError: Equatable {}
-extension TaggedEffect: Sendable where ReloadError: Sendable, ActionError: Sendable {}
+extension TaggedEffect: Equatable where TransientError: Equatable {}
+extension TaggedEffect: Sendable where TransientError: Sendable {}
 
-public func combine2<LeftValue, LeftInitialError, RightValue, RightInitialError>(
-    _ left: AsyncContent<LeftValue, LeftInitialError>,
-    _ right: AsyncContent<RightValue, RightInitialError>
-) -> AsyncContent<(LeftValue, RightValue), CombinedInitialError<LeftInitialError, RightInitialError>> {
-    let phase: AsyncContentPhase<(LeftValue, RightValue), CombinedInitialError<LeftInitialError, RightInitialError>>
+public func combine2<LeftValue, LeftBlockingError, RightValue, RightBlockingError>(
+    _ left: AsyncContent<LeftValue, LeftBlockingError>,
+    _ right: AsyncContent<RightValue, RightBlockingError>
+) -> AsyncContent<(LeftValue, RightValue), CombinedInitialError<LeftBlockingError, RightBlockingError>> {
+    let phase: AsyncContentPhase<(LeftValue, RightValue), CombinedInitialError<LeftBlockingError, RightBlockingError>>
 
     switch (left.phase, right.phase) {
     case let (.content(leftValue), .content(rightValue)):
@@ -322,37 +331,10 @@ public func combine2<LeftValue, LeftInitialError, RightValue, RightInitialError>
     }
 
     let activity = unionActivity(left.activity, right.activity)
-    return AsyncContent<(LeftValue, RightValue), CombinedInitialError<LeftInitialError, RightInitialError>>(
+    return AsyncContent<(LeftValue, RightValue), CombinedInitialError<LeftBlockingError, RightBlockingError>>(
         phase: phase,
         activity: activity
     )
-}
-
-public func mergeEffects<LeftReloadError, LeftActionError, RightReloadError, RightActionError>(
-    left: [AsyncContentEffect<LeftReloadError, LeftActionError>],
-    right: [AsyncContentEffect<RightReloadError, RightActionError>]
-) -> [TaggedEffect<EitherError<LeftReloadError, RightReloadError>, EitherError<LeftActionError, RightActionError>>] {
-    let leftEffects: [TaggedEffect<EitherError<LeftReloadError, RightReloadError>, EitherError<LeftActionError, RightActionError>>] = left.map {
-        TaggedEffect<EitherError<LeftReloadError, RightReloadError>, EitherError<LeftActionError, RightActionError>>(
-            source: .left,
-            effect: $0.mapErrors(
-                reload: { .left($0) },
-                action: { .left($0) }
-            )
-        )
-    }
-
-    let rightEffects: [TaggedEffect<EitherError<LeftReloadError, RightReloadError>, EitherError<LeftActionError, RightActionError>>] = right.map {
-        TaggedEffect<EitherError<LeftReloadError, RightReloadError>, EitherError<LeftActionError, RightActionError>>(
-            source: .right,
-            effect: $0.mapErrors(
-                reload: { .right($0) },
-                action: { .right($0) }
-            )
-        )
-    }
-
-    return leftEffects + rightEffects
 }
 
 public enum EitherError<Left, Right> {
@@ -363,18 +345,25 @@ public enum EitherError<Left, Right> {
 extension EitherError: Equatable where Left: Equatable, Right: Equatable {}
 extension EitherError: Sendable where Left: Sendable, Right: Sendable {}
 
-public extension AsyncContentEffect {
-    func mapErrors<NewReloadError, NewActionError>(
-        reload: (ReloadError) -> NewReloadError,
-        action: (ActionError) -> NewActionError
-    ) -> AsyncContentEffect<NewReloadError, NewActionError> {
-        switch self {
-        case let .reloadFailed(id, error):
-            return .reloadFailed(id: id, error: reload(error))
-        case let .actionFailed(id, error):
-            return .actionFailed(id: id, error: action(error))
-        }
+public func mergeEffects<LeftTransientError, RightTransientError>(
+    left: [AsyncContentEffect<LeftTransientError>],
+    right: [AsyncContentEffect<RightTransientError>]
+) -> [TaggedEffect<EitherError<LeftTransientError, RightTransientError>>] {
+    let leftEffects: [TaggedEffect<EitherError<LeftTransientError, RightTransientError>>] = left.map {
+        TaggedEffect<EitherError<LeftTransientError, RightTransientError>>(
+            source: .left,
+            effect: $0.mapError { .left($0) }
+        )
     }
+
+    let rightEffects: [TaggedEffect<EitherError<LeftTransientError, RightTransientError>>] = right.map {
+        TaggedEffect<EitherError<LeftTransientError, RightTransientError>>(
+            source: .right,
+            effect: $0.mapError { .right($0) }
+        )
+    }
+
+    return leftEffects + rightEffects
 }
 
 private func unionActivity(_ left: AsyncContentActivity, _ right: AsyncContentActivity) -> AsyncContentActivity {

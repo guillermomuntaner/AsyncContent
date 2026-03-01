@@ -4,15 +4,11 @@ import Testing
 @testable import AsyncContentCore
 @testable import AsyncContentSwiftUI
 
-private enum InitialError: Error, Equatable, Sendable {
+private enum BlockingError: Error, Equatable, Sendable {
     case failed
 }
 
-private enum ReloadError: Error, Equatable, Sendable {
-    case failed
-}
-
-private enum ActionError: Error, Equatable, Sendable {
+private enum TransientError: Error, Equatable, Sendable {
     case failed
 }
 
@@ -27,7 +23,7 @@ private struct Value: EmptyRepresentable, Equatable, Sendable {
 @Test
 @MainActor
 func effectBindingConsumesOnNilSet() async {
-    let store = AsyncContentStore<Value, InitialError, ReloadError, ActionError>(
+    let store = AsyncContentStore<Value, BlockingError, TransientError>(
         resource: .init(phase: .content(.init(items: [1])))
     )
 
@@ -47,7 +43,7 @@ func effectBindingConsumesOnNilSet() async {
 @Test
 @MainActor
 func effectBindingIgnoresNonNilSet() async {
-    let store = AsyncContentStore<Value, InitialError, ReloadError, ActionError>(
+    let store = AsyncContentStore<Value, BlockingError, TransientError>(
         resource: .init(phase: .content(.init(items: [1])))
     )
     store.performAction { .failure(.failed) }
@@ -63,9 +59,9 @@ func effectBindingIgnoresNonNilSet() async {
 @Test
 @MainActor
 func resourceContainerCompilesWithCustomViews() {
-    let resource = AsyncContent<Value, InitialError>(phase: .content(.init(items: [])))
+    let resource = AsyncContent<Value, BlockingError>(phase: .content(.init(items: [])))
 
-    let _: AsyncContentContainer<Value, InitialError, Text> = AsyncContentContainer(
+    let _: AsyncContentContainer<Value, BlockingError, Text> = AsyncContentContainer(
         resource: resource,
         content: { value in Text("items: \(value.items.count)") },
         initialError: { _ in Text("error") },
@@ -77,7 +73,7 @@ func resourceContainerCompilesWithCustomViews() {
 @MainActor
 func resourceContainerBodyCoversStateBranches() {
     let loading = AsyncContentContainer(
-        resource: AsyncContent<Value, InitialError>(phase: .loadingInitial),
+        resource: AsyncContent<Value, BlockingError>(phase: .loadingInitial),
         isEmpty: { $0.items.isEmpty },
         content: { _ in Text("c") },
         initialError: { _ in Text("e") },
@@ -86,7 +82,7 @@ func resourceContainerBodyCoversStateBranches() {
     _ = loading.body
 
     let failed = AsyncContentContainer(
-        resource: AsyncContent<Value, InitialError>(phase: .failedInitial(.failed)),
+        resource: AsyncContent<Value, BlockingError>(phase: .failedInitial(.failed)),
         isEmpty: { $0.items.isEmpty },
         content: { _ in Text("c") },
         initialError: { _ in Text("e") },
@@ -95,7 +91,7 @@ func resourceContainerBodyCoversStateBranches() {
     _ = failed.body
 
     let content = AsyncContentContainer(
-        resource: AsyncContent<Value, InitialError>(phase: .content(.init(items: [1])), activity: .reloading),
+        resource: AsyncContent<Value, BlockingError>(phase: .content(.init(items: [1])), activity: .reloading),
         isEmpty: { $0.items.isEmpty },
         content: { _ in Text("c") },
         initialError: { _ in Text("e") },
@@ -108,7 +104,7 @@ func resourceContainerBodyCoversStateBranches() {
 @MainActor
 func resourceContainerCustomInitWithOverlayAndLoadingIsUsable() {
     let container = AsyncContentContainer(
-        resource: AsyncContent<Value, InitialError>(phase: .content(.init(items: [1])), activity: .performingAction),
+        resource: AsyncContent<Value, BlockingError>(phase: .content(.init(items: [1])), activity: .performingAction),
         isEmpty: { $0.items.isEmpty },
         content: { _ in Text("content") },
         loading: { Text("loading") },
@@ -126,9 +122,9 @@ func resourceContainerCustomInitWithOverlayAndLoadingIsUsable() {
 @available(iOS 17.0, macOS 14.0, *)
 @MainActor
 func resourceContainerCompilesWithUnavailableDefaults() {
-    let resource = AsyncContent<Value, InitialError>(phase: .failedInitial(.failed))
+    let resource = AsyncContent<Value, BlockingError>(phase: .failedInitial(.failed))
 
-    let _: AsyncContentContainer<Value, InitialError, Text> = AsyncContentContainer(
+    let _: AsyncContentContainer<Value, BlockingError, Text> = AsyncContentContainer(
         resource: resource,
         isEmpty: { $0.items.isEmpty },
         emptyPresentation: .init(title: "No Items", message: "Nothing here", systemImage: "tray"),
@@ -150,7 +146,7 @@ func unavailablePresentationAndObservationStoreAreUsable() async {
     )
     #expect(presentation.title == "No items")
 
-    let base = AsyncContentStore<Value, InitialError, ReloadError, ActionError>(
+    let base = AsyncContentStore<Value, BlockingError, TransientError>(
         resource: .init(phase: .content(.init(items: [1])))
     )
     let observed = ObservableAsyncContentStore(base: base)

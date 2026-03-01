@@ -2,29 +2,23 @@ import Foundation
 import Testing
 @testable import AsyncContentCore
 
-private enum TestInitialError: Error, Equatable, Sendable {
+private enum TestBlockingError: Error, Equatable, Sendable {
     case failed
 }
 
-private enum TestReloadError: Error, Equatable, Sendable {
-    case failed
-}
-
-private enum TestActionError: Error, Equatable, Sendable {
+private enum TestTransientError: Error, Equatable, Sendable {
     case failed
 }
 
 private struct TestValue: EmptyRepresentable, Equatable, Sendable {
     var items: [Int]
 
-    var isEmpty: Bool {
-        items.isEmpty
-    }
+    var isEmpty: Bool { items.isEmpty }
 }
 
 @Test
 func initialLoadTransitions() {
-    var resource = AsyncContent<TestValue, TestInitialError>()
+    var resource = AsyncContent<TestValue, TestBlockingError>()
 
     #expect(resource.phase == .initial)
     #expect(resource.activity == .none)
@@ -39,25 +33,25 @@ func initialLoadTransitions() {
 
 @Test
 func initialFailureTransitions() {
-    var resource = AsyncContent<TestValue, TestInitialError>()
+    var resource = AsyncContent<TestValue, TestBlockingError>()
 
     resource.startInitialLoad()
     resource.finishInitialFailure(.failed)
 
     #expect(resource.phase == .failedInitial(.failed))
     #expect(resource.value == nil)
-    #expect(resource.initialError == .failed)
+    #expect(resource.blockingError == .failed)
 }
 
 @Test
 func reloadFailureEmitsEffectAndKeepsContent() {
-    var resource = AsyncContent<TestValue, TestInitialError>(phase: .content(.init(items: [1])))
+    var resource = AsyncContent<TestValue, TestBlockingError>(phase: .content(.init(items: [1])))
 
     let didStartReload = resource.startReload()
     #expect(didStartReload)
     #expect(resource.activity == .reloading)
 
-    let effect = resource.finishReloadFailure(TestReloadError.failed)
+    let effect = resource.finishReloadFailure(TestTransientError.failed)
 
     #expect(resource.activity == .none)
     #expect(resource.phase == .content(.init(items: [1])))
@@ -72,13 +66,13 @@ func reloadFailureEmitsEffectAndKeepsContent() {
 
 @Test
 func actionFailureEmitsEffectAndClearsActivity() {
-    var resource = AsyncContent<TestValue, TestInitialError>(phase: .content(.init(items: [1])))
+    var resource = AsyncContent<TestValue, TestBlockingError>(phase: .content(.init(items: [1])))
 
     let didStartAction = resource.startAction()
     #expect(didStartAction)
     #expect(resource.activity == .performingAction)
 
-    let effect = resource.finishActionFailure(TestActionError.failed)
+    let effect = resource.finishActionFailure(TestTransientError.failed)
 
     #expect(resource.activity == .none)
 
@@ -92,7 +86,7 @@ func actionFailureEmitsEffectAndClearsActivity() {
 
 @Test
 func supportsConcurrentChannels() {
-    var resource = AsyncContent<TestValue, TestInitialError>(phase: .content(.init(items: [1])))
+    var resource = AsyncContent<TestValue, TestBlockingError>(phase: .content(.init(items: [1])))
 
     let didStartReload = resource.startReload()
     #expect(didStartReload)
@@ -112,18 +106,18 @@ func supportsConcurrentChannels() {
 
 @Test
 func mapUtilitiesKeepActivity() {
-    let resource = AsyncContent<Int, TestInitialError>(phase: .failedInitial(.failed), activity: .performingAction)
+    let resource = AsyncContent<Int, TestBlockingError>(phase: .failedInitial(.failed), activity: .performingAction)
 
     let mappedValue = resource.mapValue { "\($0)" }
     #expect(mappedValue.activity == .performingAction)
 
-    let mappedError = resource.mapInitialError { _ in "boom" }
+    let mappedError = resource.mapBlockingError { _ in "boom" }
     #expect(mappedError.phase == .failedInitial("boom"))
 }
 
 @Test
 func emptyDetectionWorks() {
-    let resource = AsyncContent<TestValue, TestInitialError>(phase: .content(.init(items: [])))
+    let resource = AsyncContent<TestValue, TestBlockingError>(phase: .content(.init(items: [])))
 
     #expect(resource.isContentEmpty)
     #expect(resource.isContentEmpty(using: { $0.items.isEmpty }))
@@ -131,8 +125,8 @@ func emptyDetectionWorks() {
 
 @Test
 func combine2BuildsCombinedContent() {
-    let left = AsyncContent<Int, TestInitialError>(phase: .content(1), activity: .reloading)
-    let right = AsyncContent<String, TestInitialError>(phase: .content("A"), activity: .performingAction)
+    let left = AsyncContent<Int, TestBlockingError>(phase: .content(1), activity: .reloading)
+    let right = AsyncContent<String, TestBlockingError>(phase: .content("A"), activity: .performingAction)
 
     let combined = combine2(left, right)
 
@@ -148,8 +142,8 @@ func combine2BuildsCombinedContent() {
 
 @Test
 func combine2BuildsCombinedInitialError() {
-    let left = AsyncContent<Int, TestInitialError>(phase: .failedInitial(.failed))
-    let right = AsyncContent<String, TestInitialError>(phase: .failedInitial(.failed))
+    let left = AsyncContent<Int, TestBlockingError>(phase: .failedInitial(.failed))
+    let right = AsyncContent<String, TestBlockingError>(phase: .failedInitial(.failed))
 
     let combined = combine2(left, right)
 
@@ -163,19 +157,19 @@ func combine2BuildsCombinedInitialError() {
 
 @Test
 func guardPathsWithoutContentReturnFalseOrNil() {
-    var resource = AsyncContent<TestValue, TestInitialError>()
+    var resource = AsyncContent<TestValue, TestBlockingError>()
 
     #expect(resource.startReload() == false)
     #expect(resource.finishReloadSuccess(.init(items: [1])) == false)
-    #expect(resource.finishReloadFailure(TestReloadError.failed) == nil)
+    #expect(resource.finishReloadFailure(TestTransientError.failed) == nil)
 
     #expect(resource.startAction() == false)
-    #expect(resource.finishActionFailure(TestActionError.failed) == nil)
+    #expect(resource.finishActionFailure(TestTransientError.failed) == nil)
 }
 
 @Test
 func setContentAndResetRoundTrip() {
-    var resource = AsyncContent<TestValue, TestInitialError>()
+    var resource = AsyncContent<TestValue, TestBlockingError>()
     resource.setContent(.init(items: [1, 2]))
 
     #expect(resource.phase == .content(.init(items: [1, 2])))
@@ -188,9 +182,9 @@ func setContentAndResetRoundTrip() {
 
 @Test
 func mapValueCoversAllPhaseBranches() {
-    let initial = AsyncContent<Int, TestInitialError>(phase: .initial)
-    let loading = AsyncContent<Int, TestInitialError>(phase: .loadingInitial)
-    let content = AsyncContent<Int, TestInitialError>(phase: .content(3))
+    let initial = AsyncContent<Int, TestBlockingError>(phase: .initial)
+    let loading = AsyncContent<Int, TestBlockingError>(phase: .loadingInitial)
+    let content = AsyncContent<Int, TestBlockingError>(phase: .content(3))
 
     #expect(initial.mapValue { "\($0)" }.phase == .initial)
     #expect(loading.mapValue { "\($0)" }.phase == .loadingInitial)
@@ -198,14 +192,14 @@ func mapValueCoversAllPhaseBranches() {
 }
 
 @Test
-func mapInitialErrorCoversAllPhaseBranches() {
-    let initial = AsyncContent<Int, TestInitialError>(phase: .initial)
-    let loading = AsyncContent<Int, TestInitialError>(phase: .loadingInitial)
-    let content = AsyncContent<Int, TestInitialError>(phase: .content(3))
+func mapBlockingErrorCoversAllPhaseBranches() {
+    let initial = AsyncContent<Int, TestBlockingError>(phase: .initial)
+    let loading = AsyncContent<Int, TestBlockingError>(phase: .loadingInitial)
+    let content = AsyncContent<Int, TestBlockingError>(phase: .content(3))
 
-    #expect(initial.mapInitialError { _ in "x" }.phase == .initial)
-    #expect(loading.mapInitialError { _ in "x" }.phase == .loadingInitial)
-    #expect(content.mapInitialError { _ in "x" }.phase == .content(3))
+    #expect(initial.mapBlockingError { _ in "x" }.phase == .initial)
+    #expect(loading.mapBlockingError { _ in "x" }.phase == .loadingInitial)
+    #expect(content.mapBlockingError { _ in "x" }.phase == .content(3))
 }
 
 @Test
@@ -213,8 +207,8 @@ func effectHelpersAndKindWork() {
     let id1 = UUID()
     let id2 = UUID()
 
-    let reload = AsyncContentEffect<TestReloadError, TestActionError>.makeReloadFailed(error: .failed, id: id1)
-    let action = AsyncContentEffect<TestReloadError, TestActionError>.makeActionFailed(error: .failed, id: id2)
+    let reload = AsyncContentEffect<TestTransientError>.makeReloadFailed(error: .failed, id: id1)
+    let action = AsyncContentEffect<TestTransientError>.makeActionFailed(error: .failed, id: id2)
 
     #expect(reload.id == id1)
     #expect(action.id == id2)
@@ -224,10 +218,10 @@ func effectHelpersAndKindWork() {
 
 @Test
 func combine2CoversLeftRightFailureLoadingAndInitial() {
-    let leftFailure = AsyncContent<Int, TestInitialError>(phase: .failedInitial(.failed))
-    let rightFailure = AsyncContent<String, TestInitialError>(phase: .failedInitial(.failed))
-    let loading = AsyncContent<String, TestInitialError>(phase: .loadingInitial)
-    let initial = AsyncContent<String, TestInitialError>(phase: .initial)
+    let leftFailure = AsyncContent<Int, TestBlockingError>(phase: .failedInitial(.failed))
+    let rightFailure = AsyncContent<String, TestBlockingError>(phase: .failedInitial(.failed))
+    let loading = AsyncContent<String, TestBlockingError>(phase: .loadingInitial)
+    let initial = AsyncContent<String, TestBlockingError>(phase: .initial)
 
     let leftOnly = combine2(leftFailure, initial)
     let rightOnly = combine2(initial.mapValue { _ in 1 }, rightFailure)
@@ -240,18 +234,21 @@ func combine2CoversLeftRightFailureLoadingAndInitial() {
     default:
         #expect(Bool(false))
     }
+
     switch rightOnly.phase {
     case let .failedInitial(error):
         #expect(error == .right(.failed))
     default:
         #expect(Bool(false))
     }
+
     switch loadingCombined.phase {
     case .loadingInitial:
         #expect(Bool(true))
     default:
         #expect(Bool(false))
     }
+
     switch initialCombined.phase {
     case .initial:
         #expect(Bool(true))
@@ -264,10 +261,11 @@ func combine2CoversLeftRightFailureLoadingAndInitial() {
 func mergeEffectsAndTaggedIdWork() {
     let leftID = UUID()
     let rightID = UUID()
-    let left: [AsyncContentEffect<TestReloadError, TestActionError>] = [
+
+    let left: [AsyncContentEffect<TestTransientError>] = [
         .reloadFailed(id: leftID, error: .failed)
     ]
-    let right: [AsyncContentEffect<String, String>] = [
+    let right: [AsyncContentEffect<String>] = [
         .actionFailed(id: rightID, error: "boom")
     ]
 
@@ -281,12 +279,12 @@ func mergeEffectsAndTaggedIdWork() {
 }
 
 @Test
-func mapErrorsCoversBothCases() {
-    let reload = AsyncContentEffect<TestReloadError, TestActionError>.reloadFailed(id: UUID(), error: .failed)
-    let action = AsyncContentEffect<TestReloadError, TestActionError>.actionFailed(id: UUID(), error: .failed)
+func mapErrorCoversBothCases() {
+    let reload = AsyncContentEffect<TestTransientError>.reloadFailed(id: UUID(), error: .failed)
+    let action = AsyncContentEffect<TestTransientError>.actionFailed(id: UUID(), error: .failed)
 
-    let mappedReload = reload.mapErrors(reload: { _ in "r" }, action: { _ in "a" })
-    let mappedAction = action.mapErrors(reload: { _ in "r" }, action: { _ in "a" })
+    let mappedReload = reload.mapError { _ in "r" }
+    let mappedAction = action.mapError { _ in "a" }
 
     switch mappedReload {
     case let .reloadFailed(_, error):
@@ -305,10 +303,10 @@ func mapErrorsCoversBothCases() {
 
 @Test
 func unionActivityThroughCombineCoversSingleFlags() {
-    let baseLeft = AsyncContent<Int, TestInitialError>(phase: .content(1), activity: .reloading)
-    let baseRight = AsyncContent<String, TestInitialError>(phase: .content("a"), activity: .none)
+    let baseLeft = AsyncContent<Int, TestBlockingError>(phase: .content(1), activity: .reloading)
+    let baseRight = AsyncContent<String, TestBlockingError>(phase: .content("a"), activity: .none)
     #expect(combine2(baseLeft, baseRight).activity == .reloading)
 
-    let actionLeft = AsyncContent<Int, TestInitialError>(phase: .content(1), activity: .performingAction)
+    let actionLeft = AsyncContent<Int, TestBlockingError>(phase: .content(1), activity: .performingAction)
     #expect(combine2(actionLeft, baseRight).activity == .performingAction)
 }

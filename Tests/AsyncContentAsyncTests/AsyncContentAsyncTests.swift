@@ -3,15 +3,11 @@ import Testing
 @testable import AsyncContentAsync
 @testable import AsyncContentCore
 
-private enum InitialError: Error, Equatable, Sendable {
+private enum BlockingError: Error, Equatable, Sendable {
     case failed
 }
 
-private enum ReloadError: Error, Equatable, Sendable {
-    case failed
-}
-
-private enum ActionError: Error, Equatable, Sendable {
+private enum TransientError: Error, Equatable, Sendable {
     case failed
 }
 
@@ -30,7 +26,7 @@ private struct NonEmptyAwareValue: Equatable, Sendable {
 @Test
 @MainActor
 func loadSuccessUpdatesState() async {
-    let store = AsyncContentStore<Value, InitialError, ReloadError, ActionError>()
+    let store = AsyncContentStore<Value, BlockingError, TransientError>()
 
     store.load {
         try? await Task.sleep(for: .milliseconds(20))
@@ -46,7 +42,7 @@ func loadSuccessUpdatesState() async {
 @Test
 @MainActor
 func loadFailureUpdatesInitialError() async {
-    let store = AsyncContentStore<Value, InitialError, ReloadError, ActionError>()
+    let store = AsyncContentStore<Value, BlockingError, TransientError>()
 
     store.load {
         .failure(.failed)
@@ -60,7 +56,7 @@ func loadFailureUpdatesInitialError() async {
 @Test
 @MainActor
 func reloadFailureEmitsOneShotEffect() async {
-    let store = AsyncContentStore<Value, InitialError, ReloadError, ActionError>(
+    let store = AsyncContentStore<Value, BlockingError, TransientError>(
         resource: .init(phase: .content(.init(items: [1])))
     )
 
@@ -87,7 +83,7 @@ func reloadFailureEmitsOneShotEffect() async {
 @Test
 @MainActor
 func actionFailureEmitsOneShotEffect() async {
-    let store = AsyncContentStore<Value, InitialError, ReloadError, ActionError>(
+    let store = AsyncContentStore<Value, BlockingError, TransientError>(
         resource: .init(phase: .content(.init(items: [1])))
     )
 
@@ -108,7 +104,7 @@ func actionFailureEmitsOneShotEffect() async {
 @Test
 @MainActor
 func secondLoadCancelsFirstByOperationID() async {
-    let store = AsyncContentStore<Value, InitialError, ReloadError, ActionError>()
+    let store = AsyncContentStore<Value, BlockingError, TransientError>()
 
     store.load {
         try? await Task.sleep(for: .milliseconds(80))
@@ -128,7 +124,7 @@ func secondLoadCancelsFirstByOperationID() async {
 @Test
 @MainActor
 func supportsConcurrentReloadAndActionChannels() async {
-    let store = AsyncContentStore<Value, InitialError, ReloadError, ActionError>(
+    let store = AsyncContentStore<Value, BlockingError, TransientError>(
         resource: .init(phase: .content(.init(items: [1])))
     )
 
@@ -153,7 +149,7 @@ func supportsConcurrentReloadAndActionChannels() async {
 @Test
 @MainActor
 func retryInitialReusesLastOperation() async {
-    let store = AsyncContentStore<Value, InitialError, ReloadError, ActionError>()
+    let store = AsyncContentStore<Value, BlockingError, TransientError>()
 
     store.load {
         .success(.init(items: [42]))
@@ -173,14 +169,14 @@ func retryInitialReusesLastOperation() async {
 @Test
 @MainActor
 func retryInitialWithoutPreviousOperationReturnsFalse() {
-    let store = AsyncContentStore<Value, InitialError, ReloadError, ActionError>()
+    let store = AsyncContentStore<Value, BlockingError, TransientError>()
     #expect(store.retryInitial() == false)
 }
 
 @Test
 @MainActor
 func retryReloadWithoutPreviousOperationReturnsFalse() {
-    let store = AsyncContentStore<Value, InitialError, ReloadError, ActionError>(
+    let store = AsyncContentStore<Value, BlockingError, TransientError>(
         resource: .init(phase: .content(.init(items: [1])))
     )
     #expect(store.retryReload() == false)
@@ -189,7 +185,7 @@ func retryReloadWithoutPreviousOperationReturnsFalse() {
 @Test
 @MainActor
 func retryOperationHelpersInvokeProvidedOperation() async {
-    let store = AsyncContentStore<Value, InitialError, ReloadError, ActionError>(
+    let store = AsyncContentStore<Value, BlockingError, TransientError>(
         resource: .init(phase: .content(.init(items: [1])))
     )
 
@@ -207,7 +203,7 @@ func retryOperationHelpersInvokeProvidedOperation() async {
 func loadAndReloadThrowingOverloadsMapErrors() async {
     enum TestThrown: Error { case boom }
 
-    let store = AsyncContentStore<Value, InitialError, ReloadError, ActionError>(
+    let store = AsyncContentStore<Value, BlockingError, TransientError>(
         resource: .init(phase: .content(.init(items: [1])))
     )
 
@@ -220,11 +216,13 @@ func loadAndReloadThrowingOverloadsMapErrors() async {
 
     store.load { .success(.init(items: [1])) }
     try? await Task.sleep(for: .milliseconds(20))
+
     store.reload(
         operation: { throw TestThrown.boom },
         mapError: { _ in .failed }
     )
     try? await Task.sleep(for: .milliseconds(20))
+
     if case let .reloadFailed(_, error)? = store.nextEffect {
         #expect(error == .failed)
     } else {
@@ -236,7 +234,7 @@ func loadAndReloadThrowingOverloadsMapErrors() async {
 @MainActor
 func performActionThrowingOverloadAndValueActionPaths() async {
     enum TestThrown: Error { case boom }
-    let store = AsyncContentStore<Value, InitialError, ReloadError, ActionError>(
+    let store = AsyncContentStore<Value, BlockingError, TransientError>(
         resource: .init(phase: .content(.init(items: [1])))
     )
 
@@ -272,7 +270,7 @@ func performActionThrowingOverloadAndValueActionPaths() async {
 @Test
 @MainActor
 func callbackBridgeOverloadsWork() async {
-    let store = AsyncContentStore<Value, InitialError, ReloadError, ActionError>(
+    let store = AsyncContentStore<Value, BlockingError, TransientError>(
         resource: .init(phase: .content(.init(items: [1])))
     )
 
@@ -299,7 +297,7 @@ func callbackBridgeOverloadsWork() async {
 @Test
 @MainActor
 func cancelMethodsClearInFlightState() async {
-    let store = AsyncContentStore<Value, InitialError, ReloadError, ActionError>(
+    let store = AsyncContentStore<Value, BlockingError, TransientError>(
         resource: .init(phase: .content(.init(items: [1])))
     )
 
@@ -331,7 +329,7 @@ func cancelMethodsClearInFlightState() async {
 @Test
 @MainActor
 func resetClearsEffects() async {
-    let store = AsyncContentStore<Value, InitialError, ReloadError, ActionError>(
+    let store = AsyncContentStore<Value, BlockingError, TransientError>(
         resource: .init(phase: .content(.init(items: [1])))
     )
     store.performAction { .failure(.failed) }
@@ -346,7 +344,7 @@ func resetClearsEffects() async {
 @Test
 @MainActor
 func defaultIsEmptyClosureReturnsFalseForNonEmptyAwareValue() {
-    let store = AsyncContentStore<NonEmptyAwareValue, InitialError, ReloadError, ActionError>(
+    let store = AsyncContentStore<NonEmptyAwareValue, BlockingError, TransientError>(
         resource: .init(phase: .content(.init(count: 0)))
     )
 
@@ -356,6 +354,66 @@ func defaultIsEmptyClosureReturnsFalseForNonEmptyAwareValue() {
 @Test
 @MainActor
 func consumeNextEffectReturnsNilWhenQueueEmpty() {
-    let store = AsyncContentStore<Value, InitialError, ReloadError, ActionError>()
+    let store = AsyncContentStore<Value, BlockingError, TransientError>()
     #expect(store.consumeNextEffect() == nil)
+}
+
+@Test
+@MainActor
+func neverTransientErrorFlowHasNoEffectsWhenSuccessful() async {
+    let store = AsyncContentStore<Value, BlockingError, Never>(
+        resource: .init(phase: .content(.init(items: [1])))
+    )
+
+    store.reload { .success(.init(items: [2])) }
+    store.performAction { .success(()) }
+    try? await Task.sleep(for: .milliseconds(40))
+
+    #expect(store.nextEffect == nil)
+    #expect(store.resource.phase == .content(.init(items: [2])))
+}
+
+@Test
+@MainActor
+func neverTransientConvenienceOverloadsWork() async {
+    let store = AsyncContentStore<Value, BlockingError, Never>(
+        resource: .init(phase: .content(.init(items: [1])))
+    )
+
+    store.reload {
+        .init(items: [2])
+    }
+    try? await Task.sleep(for: .milliseconds(20))
+    #expect(store.resource.phase == .content(.init(items: [2])))
+
+    store.performAction {
+        try? await Task.sleep(for: .milliseconds(5))
+    }
+    try? await Task.sleep(for: .milliseconds(20))
+    #expect(store.resource.activity == .none)
+
+    store.performAction { value in
+        .init(items: value.items + [3])
+    }
+    try? await Task.sleep(for: .milliseconds(20))
+    #expect(store.resource.phase == .content(.init(items: [2, 3])))
+
+    store.reload(from: { callback in
+        callback(.init(items: [4]))
+    })
+    try? await Task.sleep(for: .milliseconds(20))
+    #expect(store.resource.phase == .content(.init(items: [4])))
+
+    store.performAction(from: { callback in
+        callback()
+    })
+    try? await Task.sleep(for: .milliseconds(20))
+    #expect(store.resource.activity == .none)
+
+    store.performAction(from: { value, callback in
+        callback(.init(items: value.items + [5]))
+    })
+    try? await Task.sleep(for: .milliseconds(20))
+    #expect(store.resource.phase == .content(.init(items: [4, 5])))
+    #expect(store.nextEffect == nil)
 }

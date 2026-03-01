@@ -5,17 +5,16 @@ import AsyncContentCore
 @MainActor
 public final class AsyncContentStore<
     Value: Sendable,
-    InitialError: Error & Sendable,
-    ReloadError: Error & Sendable,
-    ActionError: Error & Sendable
+    BlockingError: Error & Sendable,
+    TransientError: Error & Sendable
 >: ObservableObject {
-    public typealias InitialOperation = @Sendable () async -> Result<Value, InitialError>
-    public typealias ReloadOperation = @Sendable () async -> Result<Value, ReloadError>
-    public typealias ActionOperation = @Sendable () async -> Result<Void, ActionError>
-    public typealias ValueActionOperation = @Sendable (Value) async -> Result<Value, ActionError>
+    public typealias InitialOperation = @Sendable () async -> Result<Value, BlockingError>
+    public typealias ReloadOperation = @Sendable () async -> Result<Value, TransientError>
+    public typealias ActionOperation = @Sendable () async -> Result<Void, TransientError>
+    public typealias ValueActionOperation = @Sendable (Value) async -> Result<Value, TransientError>
 
-    @Published public private(set) var resource: AsyncContent<Value, InitialError>
-    @Published public private(set) var effects: [AsyncContentEffect<ReloadError, ActionError>] = []
+    @Published public private(set) var resource: AsyncContent<Value, BlockingError>
+    @Published public private(set) var effects: [AsyncContentEffect<TransientError>] = []
 
     private let isEmpty: (Value) -> Bool
 
@@ -31,7 +30,7 @@ public final class AsyncContentStore<
     private var lastReloadOperation: ReloadOperation?
 
     public init(
-        resource: AsyncContent<Value, InitialError> = .init(),
+        resource: AsyncContent<Value, BlockingError> = .init(),
         isEmpty: @escaping (Value) -> Bool = { _ in false }
     ) {
         self.resource = resource
@@ -48,12 +47,12 @@ public final class AsyncContentStore<
         resource.isContentEmpty(using: isEmpty)
     }
 
-    public var nextEffect: AsyncContentEffect<ReloadError, ActionError>? {
+    public var nextEffect: AsyncContentEffect<TransientError>? {
         effects.first
     }
 
     @discardableResult
-    public func consumeNextEffect() -> AsyncContentEffect<ReloadError, ActionError>? {
+    public func consumeNextEffect() -> AsyncContentEffect<TransientError>? {
         guard !effects.isEmpty else {
             return nil
         }
@@ -89,7 +88,7 @@ public final class AsyncContentStore<
 
     public func load(
         operation: @escaping @Sendable () async throws -> Value,
-        mapError: @escaping @Sendable (Error) -> InitialError
+        mapError: @escaping @Sendable (Error) -> BlockingError
     ) {
         load {
             do {
@@ -133,7 +132,7 @@ public final class AsyncContentStore<
 
     public func reload(
         operation: @escaping @Sendable () async throws -> Value,
-        mapError: @escaping @Sendable (Error) -> ReloadError
+        mapError: @escaping @Sendable (Error) -> TransientError
     ) {
         reload {
             do {
@@ -176,7 +175,7 @@ public final class AsyncContentStore<
 
     public func performAction(
         operation: @escaping @Sendable () async throws -> Void,
-        mapError: @escaping @Sendable (Error) -> ActionError
+        mapError: @escaping @Sendable (Error) -> TransientError
     ) {
         performAction {
             do {
@@ -205,7 +204,7 @@ public final class AsyncContentStore<
     }
 
     public func load(
-        from callback: @escaping @Sendable (@escaping @Sendable (Result<Value, InitialError>) -> Void) -> Void
+        from callback: @escaping @Sendable (@escaping @Sendable (Result<Value, BlockingError>) -> Void) -> Void
     ) {
         load {
             await withCheckedContinuation { continuation in
@@ -217,7 +216,7 @@ public final class AsyncContentStore<
     }
 
     public func reload(
-        from callback: @escaping @Sendable (@escaping @Sendable (Result<Value, ReloadError>) -> Void) -> Void
+        from callback: @escaping @Sendable (@escaping @Sendable (Result<Value, TransientError>) -> Void) -> Void
     ) {
         reload {
             await withCheckedContinuation { continuation in
@@ -229,7 +228,7 @@ public final class AsyncContentStore<
     }
 
     public func performAction(
-        from callback: @escaping @Sendable (@escaping @Sendable (Result<Void, ActionError>) -> Void) -> Void
+        from callback: @escaping @Sendable (@escaping @Sendable (Result<Void, TransientError>) -> Void) -> Void
     ) {
         performAction {
             await withCheckedContinuation { continuation in
@@ -264,11 +263,11 @@ public final class AsyncContentStore<
         resource.activity = resource.activity.settingPerformingAction(false)
     }
 
-    private func emit(_ effect: AsyncContentEffect<ReloadError, ActionError>) {
+    private func emit(_ effect: AsyncContentEffect<TransientError>) {
         effects.append(effect)
     }
 
-    private func finishInitial(result: Result<Value, InitialError>, operationID: UUID) {
+    private func finishInitial(result: Result<Value, BlockingError>, operationID: UUID) {
         guard initialOperationID == operationID else {
             return
         }
@@ -284,7 +283,7 @@ public final class AsyncContentStore<
         }
     }
 
-    private func finishReload(result: Result<Value, ReloadError>, operationID: UUID) {
+    private func finishReload(result: Result<Value, TransientError>, operationID: UUID) {
         guard reloadOperationID == operationID else {
             return
         }
@@ -296,15 +295,13 @@ public final class AsyncContentStore<
         case let .success(value):
             _ = resource.finishReloadSuccess(value)
         case let .failure(error):
-            if let rawEffect = resource.finishReloadFailure(error) {
-                if case let .reloadFailed(id, reloadError) = rawEffect {
-                    emit(.reloadFailed(id: id, error: reloadError))
-                }
+            if let effect = resource.finishReloadFailure(error) {
+                emit(effect)
             }
         }
     }
 
-    private func finishAction(result: Result<Void, ActionError>, operationID: UUID) {
+    private func finishAction(result: Result<Void, TransientError>, operationID: UUID) {
         guard actionOperationID == operationID else {
             return
         }
@@ -316,15 +313,13 @@ public final class AsyncContentStore<
         case .success:
             resource.finishActionSuccess()
         case let .failure(error):
-            if let rawEffect = resource.finishActionFailure(error) {
-                if case let .actionFailed(id, actionError) = rawEffect {
-                    emit(.actionFailed(id: id, error: actionError))
-                }
+            if let effect = resource.finishActionFailure(error) {
+                emit(effect)
             }
         }
     }
 
-    private func finishValueAction(result: Result<Value, ActionError>, operationID: UUID) {
+    private func finishValueAction(result: Result<Value, TransientError>, operationID: UUID) {
         guard actionOperationID == operationID else {
             return
         }
@@ -337,17 +332,72 @@ public final class AsyncContentStore<
             resource.phase = .content(updatedValue)
             resource.finishActionSuccess()
         case let .failure(error):
-            if let rawEffect = resource.finishActionFailure(error) {
-                if case let .actionFailed(id, actionError) = rawEffect {
-                    emit(.actionFailed(id: id, error: actionError))
-                }
+            if let effect = resource.finishActionFailure(error) {
+                emit(effect)
             }
         }
     }
 }
 
 public extension AsyncContentStore where Value: EmptyRepresentable {
-    convenience init(resource: AsyncContent<Value, InitialError> = .init()) {
+    convenience init(resource: AsyncContent<Value, BlockingError> = .init()) {
         self.init(resource: resource, isEmpty: { $0.isEmpty })
+    }
+}
+
+public extension AsyncContentStore where TransientError == Never {
+    func reload(operation: @escaping @Sendable () async -> Value) {
+        reload {
+            .success(await operation())
+        }
+    }
+
+    func performAction(operation: @escaping @Sendable () async -> Void) {
+        performAction {
+            await operation()
+            return .success(())
+        }
+    }
+
+    func performAction(operation: @escaping @Sendable (Value) async -> Value) {
+        performAction { value in
+            .success(await operation(value))
+        }
+    }
+
+    func reload(
+        from callback: @escaping @Sendable (@escaping @Sendable (Value) -> Void) -> Void
+    ) {
+        reload {
+            await withCheckedContinuation { continuation in
+                callback { value in
+                    continuation.resume(returning: value)
+                }
+            }
+        }
+    }
+
+    func performAction(
+        from callback: @escaping @Sendable (@escaping @Sendable () -> Void) -> Void
+    ) {
+        performAction {
+            await withCheckedContinuation { continuation in
+                callback {
+                    continuation.resume(returning: ())
+                }
+            }
+        }
+    }
+
+    func performAction(
+        from callback: @escaping @Sendable (Value, @escaping @Sendable (Value) -> Void) -> Void
+    ) {
+        performAction { value in
+            await withCheckedContinuation { continuation in
+                callback(value) { updated in
+                    continuation.resume(returning: updated)
+                }
+            }
+        }
     }
 }

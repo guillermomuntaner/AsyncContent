@@ -4,7 +4,7 @@ import SwiftUI
 
 public extension AsyncContentStore {
     @MainActor
-    func effectBinding() -> Binding<AsyncContentEffect<ReloadError, ActionError>?> {
+    func effectBinding() -> Binding<AsyncContentEffect<TransientError>?> {
         Binding(
             get: { self.nextEffect },
             set: { value in
