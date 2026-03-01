@@ -8,7 +8,7 @@ SwiftUI-first loading lifecycle primitives with three layers:
 ## Install (SPM)
 
 ```swift
-.package(url: "https://github.com/your-org/AsyncContent.git", from: "0.1.0")
+.package(url: "https://github.com/guillermomuntaner/AsyncContent.git", from: "0.1.0")
 ```
 
 Products:
