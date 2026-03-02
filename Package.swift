@@ -8,11 +8,16 @@ let package = Package(
         .macOS(.v13)
     ],
     products: [
+        .library(name: "AsyncContent", targets: ["AsyncContent"]),
         .library(name: "AsyncContentCore", targets: ["AsyncContentCore"]),
         .library(name: "AsyncContentAsync", targets: ["AsyncContentAsync"]),
         .library(name: "AsyncContentSwiftUI", targets: ["AsyncContentSwiftUI"]),
     ],
     targets: [
+        .target(
+            name: "AsyncContent",
+            dependencies: ["AsyncContentCore", "AsyncContentAsync", "AsyncContentSwiftUI"]
+        ),
         .target(
             name: "AsyncContentCore"
         ),

@@ -1,6 +1,5 @@
 import Testing
-import AsyncContentAsync
-import AsyncContentCore
+import AsyncContent
 @testable import AsyncContentDemo
 
 struct AsyncContentDemoTests {

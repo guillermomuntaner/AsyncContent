@@ -1,6 +1,4 @@
-import AsyncContentAsync
-import AsyncContentCore
-import AsyncContentSwiftUI
+import AsyncContent
 import SwiftUI
 import Combine
 

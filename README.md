@@ -12,6 +12,7 @@ SwiftUI-first loading lifecycle primitives with three layers:
 ```
 
 Products:
+- `AsyncContent` (recommended umbrella module)
 - `AsyncContentCore`
 - `AsyncContentAsync`
 - `AsyncContentSwiftUI`
@@ -26,9 +27,7 @@ This is the primary integration path:
 ### 1) Specialize For App Errors (Simple Loading Case)
 
 ```swift
-import AsyncContentAsync
-import AsyncContentCore
-import AsyncContentSwiftUI
+import AsyncContent
 import SwiftUI
 
 enum AppUIError: Error, Equatable, Sendable {
@@ -91,8 +90,7 @@ struct UsersScreen: View {
 If you use Observation instead of `ObservableObject`:
 
 ```swift
-import AsyncContentAsync
-import AsyncContentSwiftUI
+import AsyncContent
 import Observation
 
 @available(iOS 17, macOS 14, *)
@@ -225,6 +223,22 @@ flowchart LR
 ```
 
 ## Advanced
+
+### Fine-Grained Imports
+
+Default usage should import only:
+
+```swift
+import AsyncContent
+```
+
+If you want strict module boundaries, import individual modules:
+
+```swift
+import AsyncContentCore
+import AsyncContentAsync
+import AsyncContentSwiftUI
+```
 
 ### Lower-Level API (`AsyncContentCore`)
 

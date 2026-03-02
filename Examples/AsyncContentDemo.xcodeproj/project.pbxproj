@@ -7,9 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		A916D2FF2F53CFBD00309273 /* AsyncContentAsync in Frameworks */ = {isa = PBXBuildFile; productRef = A916D2FE2F53CFBD00309273 /* AsyncContentAsync */; };
-		A916D3012F53CFBD00309273 /* AsyncContentCore in Frameworks */ = {isa = PBXBuildFile; productRef = A916D3002F53CFBD00309273 /* AsyncContentCore */; };
-		A916D3032F53CFBD00309273 /* AsyncContentSwiftUI in Frameworks */ = {isa = PBXBuildFile; productRef = A916D3022F53CFBD00309273 /* AsyncContentSwiftUI */; };
+		A916D2FF2F53CFBD00309273 /* AsyncContent in Frameworks */ = {isa = PBXBuildFile; productRef = A916D2FE2F53CFBD00309273 /* AsyncContent */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -58,9 +56,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A916D3012F53CFBD00309273 /* AsyncContentCore in Frameworks */,
-				A916D3032F53CFBD00309273 /* AsyncContentSwiftUI in Frameworks */,
-				A916D2FF2F53CFBD00309273 /* AsyncContentAsync in Frameworks */,
+				A916D2FF2F53CFBD00309273 /* AsyncContent in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -121,9 +117,7 @@
 			);
 			name = AsyncContentDemo;
 			packageProductDependencies = (
-				A916D2FE2F53CFBD00309273 /* AsyncContentAsync */,
-				A916D3002F53CFBD00309273 /* AsyncContentCore */,
-				A916D3022F53CFBD00309273 /* AsyncContentSwiftUI */,
+				A916D2FE2F53CFBD00309273 /* AsyncContent */,
 			);
 			productName = AsyncContentDemo;
 			productReference = A916D2C72F53CE4000309273 /* AsyncContentDemo.app */;
@@ -641,17 +635,9 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		A916D2FE2F53CFBD00309273 /* AsyncContentAsync */ = {
+		A916D2FE2F53CFBD00309273 /* AsyncContent */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = AsyncContentAsync;
-		};
-		A916D3002F53CFBD00309273 /* AsyncContentCore */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = AsyncContentCore;
-		};
-		A916D3022F53CFBD00309273 /* AsyncContentSwiftUI */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = AsyncContentSwiftUI;
+			productName = AsyncContent;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
